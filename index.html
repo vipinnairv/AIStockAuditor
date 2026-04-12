@@ -429,10 +429,10 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--T
 
 /* ═══ HEADER ═══ */
 #hdr{
-  position:sticky;top:0;z-index:300;
+  position:sticky;top:44px;z-index:300;
   background:var(--NV);
-  height:50px;display:flex;align-items:center;
-  padding:0 16px;gap:12px;
+  min-height:50px;height:auto;display:flex;align-items:center;
+  padding:0 16px;gap:12px;flex-wrap:wrap;
   box-shadow:0 2px 12px rgba(0,0,0,.25);
 }
 .brand{display:flex;align-items:center;gap:10px;flex:1;text-decoration:none}
@@ -464,12 +464,17 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--T
 
 /* ═══ NAV ═══ */
 #nav{
-  position:sticky;top:50px;z-index:299;
-  background:var(--white);border-bottom:1px solid var(--bd);
-  display:flex;overflow-x:auto;scrollbar-width:none;
-  padding:0 12px;box-shadow:var(--sh);
+  position:relative;top:auto;z-index:auto;
+  background:var(--white);border-bottom:none;
+  display:flex;overflow-x:auto;
+  scrollbar-width:thin;scrollbar-color:var(--bd) transparent;
+  padding:0 4px;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;
 }
-#nav::-webkit-scrollbar{display:none}
+#nav::-webkit-scrollbar{height:3px;}
+#nav::-webkit-scrollbar-thumb{background:var(--bd);border-radius:3px;}
+#nav::-webkit-scrollbar-track{background:transparent;}
 .tab{
   display:flex;align-items:center;gap:5px;
   padding:0 12px;height:40px;
@@ -863,20 +868,76 @@ td.r{text-align:right}
   .chart-row { page-break-inside:avoid; }
 }
 
-/* ═══ RESPONSIVE IMPROVEMENTS ═══ */
+/* ═══ RESPONSIVE — COMPREHENSIVE MOBILE OVERHAUL ═══ */
+
+/* Nav scroll fade indicator */
+#nav-wrap { position:sticky;top:44px;z-index:299;background:var(--white);border-bottom:1px solid var(--bd); }
+#nav { position:static;top:auto;border-bottom:none;padding:0 8px; }
+#nav-scroll-hint { display:none;position:absolute;right:0;top:0;bottom:0;width:40px;background:linear-gradient(to right,transparent,var(--white));pointer-events:none;z-index:1; }
+
+/* Table horizontal scroll wrapper */
+.tw-wrap { overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--r2); }
+.tw { min-width:560px; }
+
+/* ─── 900px ─── */
 @media(max-width:900px){
   .sum-banner { grid-template-columns:1fr; }
   .chart-row { grid-template-columns:1fr; }
   .reports-grid { grid-template-columns:1fr; }
+  .kpi-grid { grid-template-columns:repeat(2,1fr); }
 }
-@media(max-width:640px){
-  .kpi-grid { grid-template-columns:1fr 1fr; }
-  main { padding:10px 12px; }
-  .fr { grid-template-columns:1fr; }
-  #hdr { padding:0 12px; }
+
+/* ─── 768px ─── */
+@media(max-width:768px){
+  /* Header: stack into 2 rows */
+  #hdr { flex-wrap:wrap; gap:8px; padding:8px 12px; height:auto; }
+  .hdr-right { flex-wrap:wrap; gap:6px; width:100%; justify-content:flex-end; }
+  .hdr-badge { font-size:10px; padding:3px 8px; }
   .brand-name { font-size:13px; }
-  .hdr-badge { display:none; }
-  .stab { padding:0 12px; font-size:11.5px; }
+
+  /* Nav tabs — smaller */
+  #nav { padding:0 4px; }
+  .tab { padding:0 8px; height:36px; font-size:10.5px; gap:3px; }
+  .tab-ic { font-size:12px; }
+
+  /* Main content */
+  main { padding:10px 10px; }
+
+  /* Forms */
+  .fr { grid-template-columns:1fr; }
+  .itr-vda-row { grid-template-columns:1fr; }
+
+  /* Summary banner */
+  .sb-right { display:none; }
+}
+
+/* ─── 540px (mobile) ─── */
+@media(max-width:540px){
+  /* Header: hide date badge, shrink */
+  #hdr-date-badge { display:none; }
+  #usd-badge { font-size:10px; padding:3px 8px; }
+  .brand-by { display:none; }
+  .hdr-sync-btn { font-size:10px; padding:4px 8px; }
+
+  /* Nav — tiny tabs */
+  .tab { padding:0 6px; height:34px; font-size:10px; }
+  .tab-cnt { display:none; }
+
+  /* KPI single column on very small */
+  .kpi-grid { grid-template-columns:1fr 1fr; }
+  .kpi { padding:10px 12px; }
+  .kv { font-size:18px; }
+
+  /* Cards full-width */
+  .card { border-radius:10px; }
+  main { padding:8px; }
+
+  /* Subtabs */
+  .stab { padding:0 10px; font-size:10.5px; }
+
+  /* Tax grid */
+  .tax-sum-grid { grid-template-columns:1fr 1fr; }
+  .itr-note-label { min-width:90px; font-size:10.5px; }
 }
 </style>
 </head>
@@ -930,13 +991,59 @@ td.r{text-align:right}
 
   </div>
 </div>
+<style>
+/* ═══ APP SWITCHER — MOBILE ═══ */
+@media(max-width:540px){
+  #app-switcher { padding:0 8px; height:40px; }
+  .as-brand-text { display:none; }
+  #btn-analyser,#btn-portfolio { padding:5px 8px !important; font-size:11px !important; }
+}
+@media(max-width:380px){
+  #btn-analyser span,#btn-portfolio span { display:none; }
+}
+/* Analyser header mobile */
+@media(max-width:600px){
+  .header-inner { flex-wrap:wrap; gap:6px; padding:10px 12px; }
+  .header-right { gap:6px; flex-wrap:wrap; }
+  .api-key-input { width:160px; }
+}
+/* Disclaimer card mobile */
+@media(max-width:500px){
+  .disc-card { padding:24px 18px; border-radius:14px; }
+  .disc-title { font-size:26px; }
+  .disc-actions { flex-direction:column; align-items:stretch; }
+  .disc-btn-accept,.disc-btn-decline { text-align:center; }
+}
+/* Portfolio manager sticky offset when switcher is visible */
+#section-portfolio #nav-wrap { top:44px; }
+#section-portfolio #hdr { top:44px; }
+@media(max-width:540px){
+  #section-portfolio #nav-wrap { top:40px; }
+  #section-portfolio #hdr { top:40px; }
+}
+</style>
+<script>
+// Disclaimer overlay — runs immediately, independent of all other JS
+(function(){
+  try {
+    if(localStorage.getItem('advStockDisclaimer_v1')==='accepted'){
+      var ov=document.getElementById('disclaimer-overlay');
+      if(ov) ov.classList.add('hidden');
+      return;
+    }
+  } catch(e){}
+  // Not yet accepted — keep overlay visible, lock background scroll
+  document.body.style.overflow='hidden';
+  document.documentElement.style.overflow='hidden';
+})();
+</script>
 
 <!-- AdvanceStock Pro App Switcher -->
-<div id="app-switcher" style="position:fixed;top:0;left:0;right:0;height:44px;background:#0f172a;border-bottom:1px solid #1e293b;z-index:10000;display:flex;align-items:center;justify-content:space-between;padding:0 16px;box-shadow:0 2px 12px rgba(0,0,0,.4);">
-  <div style="display:flex;align-items:center;gap:10px;">
-    <div style="width:30px;height:30px;border-radius:7px;background:linear-gradient(135deg,#f59e0b,#f97316);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:900;color:#000;letter-spacing:-1px;flex-shrink:0;">AS</div>
-    <div>
-      <div style="font-size:13px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.1">AdvanceStock <span style="color:#f59e0b">Pro</span></div>
+<div id="app-switcher" style="position:fixed;top:0;left:0;right:0;height:44px;background:#0f172a;border-bottom:1px solid #1e293b;z-index:10000;display:flex;align-items:center;justify-content:space-between;padding:0 12px;box-shadow:0 2px 12px rgba(0,0,0,.4);">
+  <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+    <div style="width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#f59e0b,#f97316);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;color:#000;letter-spacing:-1px;flex-shrink:0;">AS</div>
+    <div class="as-brand-text">
+      <div style="font-size:12px;font-weight:800;color:#fff;letter-spacing:-.2px;line-height:1.1;white-space:nowrap;">AdvanceStock <span style="color:#f59e0b">Pro</span></div>
       <div style="font-size:9px;color:rgba(255,255,255,.4);font-weight:400;letter-spacing:.3px">by Vipin Nair</div>
     </div>
   </div>
@@ -1406,20 +1513,27 @@ td.r{text-align:right}
 </div>
 
 <!-- ═══ NAV ═══ -->
-<div id="nav">
-  <div class="tab active" data-tab="dashboard"><span class="tab-ic">📊</span> Dashboard</div>
-  <div class="tab" data-tab="india"><span class="tab-ic">🇮🇳</span> India Equity <span class="tab-cnt" id="cnt-india">0</span></div>
-  <div class="tab" data-tab="us"><span class="tab-ic">🇺🇸</span> US Equity <span class="tab-cnt" id="cnt-us">0</span></div>
-  <div class="tab" data-tab="crypto"><span class="tab-ic">₿</span> Crypto <span class="tab-cnt" id="cnt-crypto">0</span></div>
-  <div class="tab" data-tab="fd"><span class="tab-ic">🏦</span> FD &amp; Bonds <span class="tab-cnt" id="cnt-fd">0</span></div>
-  <div class="tab" data-tab="mf"><span class="tab-ic">📈</span> Mutual Funds <span class="tab-cnt" id="cnt-mf">0</span></div>
-  <div class="tab" data-tab="taxation"><span class="tab-ic">🧾</span> Taxation</div>
-  <div class="tab" data-tab="analysis"><span class="tab-ic">🧠</span> Portfolio Analysis</div>
-  <div class="tab" data-tab="reports"><span class="tab-ic">📑</span> Reports</div>
-  <div class="tab" data-tab="transactions"><span class="tab-ic">📋</span> Transactions</div>
-  <div class="tab" data-tab="ltp"><span class="tab-ic">🔄</span> Update LTP</div>
-  <div class="tab" data-tab="datamgmt"><span class="tab-ic">⚙️</span> Data Mgmt</div>
-  <div class="tab" data-tab="sync"><span class="tab-ic">☁</span> Google Drive</div>
+<div id="nav-wrap" style="position:sticky;top:44px;z-index:299;background:var(--white);border-bottom:1px solid var(--bd);box-shadow:var(--sh);display:flex;align-items:center;">
+  <!-- Left scroll arrow -->
+  <button id="nav-left" onclick="scrollNav(-1)" style="display:none;flex-shrink:0;width:30px;height:40px;border:none;background:var(--white);color:var(--T3);font-size:16px;cursor:pointer;border-right:1px solid var(--bd);padding:0;line-height:1;">&#8249;</button>
+  <!-- Scrollable nav -->
+  <div id="nav" style="flex:1;position:static;top:auto;border-bottom:none;min-width:0;">
+    <div class="tab active" data-tab="dashboard"><span class="tab-ic">📊</span> Dashboard</div>
+    <div class="tab" data-tab="india"><span class="tab-ic">🇮🇳</span> India Equity <span class="tab-cnt" id="cnt-india">0</span></div>
+    <div class="tab" data-tab="us"><span class="tab-ic">🇺🇸</span> US Equity <span class="tab-cnt" id="cnt-us">0</span></div>
+    <div class="tab" data-tab="crypto"><span class="tab-ic">₿</span> Crypto <span class="tab-cnt" id="cnt-crypto">0</span></div>
+    <div class="tab" data-tab="fd"><span class="tab-ic">🏦</span> FD &amp; Bonds <span class="tab-cnt" id="cnt-fd">0</span></div>
+    <div class="tab" data-tab="mf"><span class="tab-ic">📈</span> Mutual Funds <span class="tab-cnt" id="cnt-mf">0</span></div>
+    <div class="tab" data-tab="taxation"><span class="tab-ic">🧾</span> Taxation</div>
+    <div class="tab" data-tab="analysis"><span class="tab-ic">🧠</span> Portfolio Analysis</div>
+    <div class="tab" data-tab="reports"><span class="tab-ic">📑</span> Reports</div>
+    <div class="tab" data-tab="transactions"><span class="tab-ic">📋</span> Transactions</div>
+    <div class="tab" data-tab="ltp"><span class="tab-ic">🔄</span> Update LTP</div>
+    <div class="tab" data-tab="datamgmt"><span class="tab-ic">⚙️</span> Data Mgmt</div>
+    <div class="tab" data-tab="sync"><span class="tab-ic">☁</span> Google Drive</div>
+  </div>
+  <!-- Right scroll arrow -->
+  <button id="nav-right" onclick="scrollNav(1)" style="flex-shrink:0;width:30px;height:40px;border:none;background:var(--white);color:var(--T3);font-size:16px;cursor:pointer;border-left:1px solid var(--bd);padding:0;line-height:1;">&#8250;</button>
 </div>
 
 <main>
@@ -1428,6 +1542,13 @@ td.r{text-align:right}
 <div class="page active" id="page-dashboard">
   <div class="sum-banner" id="sum-banner"></div>
   <div class="kpi-grid" id="dash-kpis"></div>
+  <!-- Quick Actions row -->
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;">
+    <button onclick="goTab('analysis')" style="display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;background:linear-gradient(135deg,#0F172A,#1E293B);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.2);">🧠 AI Portfolio Insights</button>
+    <button onclick="goTab('analysis')" style="display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;background:linear-gradient(135deg,#1E3A5F,#0F4C81);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.2);">📊 Portfolio Analysis</button>
+    <button onclick="goTab('ltp')" style="display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;background:var(--P);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 10px rgba(255,107,53,.3);">🔄 Update LTP Prices</button>
+    <button onclick="goTab('datamgmt')" style="display:flex;align-items:center;gap:7px;padding:10px 18px;border-radius:10px;background:#F8FAFC;color:var(--T2);border:1px solid var(--bd);font-size:13px;font-weight:700;cursor:pointer;">⚙️ Data Management</button>
+  </div>
   <div id="ticker"><div class="ti" id="ti"></div></div>
   <div class="chart-row">
     <div class="card">
@@ -1870,12 +1991,34 @@ td.r{text-align:right}
   </div>
 
   <!-- AI Portfolio Insights -->
-  <div class="card" style="margin-bottom:18px;border-top:3px solid var(--P)">
-    <div class="ch" style="background:linear-gradient(135deg,#0F172A,#1E293B)">
+  <div class="card" style="margin-bottom:18px;border-top:3px solid var(--P)" id="ai-insights-card">
+    <div class="ch" style="background:linear-gradient(135deg,#0F172A,#1E293B);flex-wrap:wrap;gap:8px;">
       <span class="ct" style="color:#fff;display:flex;align-items:center;gap:8px"><span style="font-size:16px">🤖</span> AI Portfolio Insights &amp; Action Plan</span>
-      <span style="font-size:10.5px;color:rgba(255,255,255,.4)">Rule-based smart analysis · Updated on each render</span>
+      <span style="font-size:10.5px;color:rgba(255,255,255,.4)" id="pi-engine-label">Rule-based · Free</span>
     </div>
-    <div id="ai-insights-panel" class="cb" style="padding:16px"></div>
+    <div class="cb" style="padding:16px 16px 8px;">
+      <!-- Engine Selector -->
+      <div style="background:#F8FAFC;border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:14px;">
+        <div style="font-size:10.5px;font-weight:700;color:var(--T3);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;">🔧 AI Engine</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+          <button id="pi-btn-builtin" class="btn" onclick="selectPIEngine('builtin',this)" style="padding:6px 14px;font-size:12px;background:var(--P);color:#fff;border:none;border-radius:6px;cursor:pointer;">🤖 Built-in (Free)</button>
+          <button id="pi-btn-groq"    class="btn" onclick="selectPIEngine('groq',this)"    style="padding:6px 14px;font-size:12px;background:#fff;color:var(--T2);border:1px solid var(--bd);border-radius:6px;cursor:pointer;">⚡ Groq (Free)</button>
+          <button id="pi-btn-claude"  class="btn" onclick="selectPIEngine('claude',this)"  style="padding:6px 14px;font-size:12px;background:#fff;color:var(--T2);border:1px solid var(--bd);border-radius:6px;cursor:pointer;">👑 Claude (Advanced)</button>
+        </div>
+        <!-- Groq Key -->
+        <div id="pi-groq-row" style="display:none;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:600;color:var(--T3);margin-bottom:5px;">⚡ Groq API Key &nbsp;<a href="https://console.groq.com" target="_blank" style="color:var(--P);font-weight:600;">Get free key →</a></div>
+          <input id="pi-groq-key" type="password" placeholder="gsk_..." style="width:100%;border:1px solid var(--bd);border-radius:6px;padding:7px 10px;font-size:12px;font-family:monospace;background:#fff;color:var(--T1);" oninput="try{localStorage.setItem('pi_groq_key',this.value)}catch(e){}"/>
+        </div>
+        <!-- Claude Key -->
+        <div id="pi-claude-row" style="display:none;margin-bottom:8px;">
+          <div style="font-size:11px;font-weight:600;color:var(--T3);margin-bottom:5px;">👑 Claude API Key &nbsp;<a href="https://console.anthropic.com" target="_blank" style="color:var(--P);font-weight:600;">Get key →</a></div>
+          <input id="pi-claude-key" type="password" placeholder="sk-ant-..." style="width:100%;border:1px solid var(--bd);border-radius:6px;padding:7px 10px;font-size:12px;font-family:monospace;background:#fff;color:var(--T1);" oninput="try{localStorage.setItem('pi_claude_key',this.value)}catch(e){}"/>
+        </div>
+        <button onclick="runPortfolioAI()" style="width:100%;padding:10px;border-radius:8px;background:var(--P);color:#fff;border:none;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:.3px;">🧠 Generate AI Portfolio Insights</button>
+      </div>
+    </div>
+    <div id="ai-insights-panel" class="cb" style="padding:0 16px 16px;"></div>
   </div>
 </div>
 
@@ -6662,6 +6805,105 @@ function renderAIInsights() {
   </div>`;
 }
 
+/* ══ PORTFOLIO AI ENGINE ══ */
+var _piEngine = 'builtin';
+function selectPIEngine(engine, btn) {
+  _piEngine = engine;
+  ['builtin','groq','claude'].forEach(e => {
+    var b = document.getElementById('pi-btn-'+e);
+    if (b) b.style.background = e===engine ? 'var(--P)' : '#fff',
+            b.style.color     = e===engine ? '#fff'     : 'var(--T2)';
+  });
+  var lbl = {builtin:'Rule-based · Free', groq:'Groq · llama-3.3-70b · Free', claude:'Claude Sonnet 4 · Advanced'};
+  var el = document.getElementById('pi-engine-label');
+  if (el) el.textContent = lbl[engine] || '';
+  document.getElementById('pi-groq-row').style.display   = engine==='groq'   ? 'block' : 'none';
+  document.getElementById('pi-claude-row').style.display = engine==='claude' ? 'block' : 'none';
+  // Restore saved keys
+  if (engine==='groq') {
+    var k=localStorage.getItem('pi_groq_key')||'';
+    var ki=document.getElementById('pi-groq-key'); if(ki&&!ki.value) ki.value=k;
+  }
+  if (engine==='claude') {
+    var k2=localStorage.getItem('pi_claude_key')||'';
+    var ki2=document.getElementById('pi-claude-key'); if(ki2&&!ki2.value) ki2.value=k2;
+  }
+}
+
+function buildPortfolioPrompt() {
+  var g = grand();
+  var holdings = [];
+  S.indEQ.forEach(h=>{ var r=((h.ltp-h.avgCost)/h.avgCost*100).toFixed(1); holdings.push(`India EQ: ${h.name} | Qty:${h.qty} | Avg:₹${h.avgCost} | LTP:₹${h.ltp} | Return:${r}% | Value:₹${(h.qty*h.ltp).toFixed(0)}`); });
+  S.usEQ.forEach(h=>{  var r=((h.ltp-h.avgCost)/h.avgCost*100).toFixed(1);  holdings.push(`US EQ: ${h.name} | Qty:${h.qty} | Avg:$${h.avgCost} | LTP:$${h.ltp} | Return:${r}% | INR Value:₹${((h.qty*h.ltp)*S.usdInr).toFixed(0)}`); });
+  S.crypto.forEach(h=>{ var r=((h.price-h.buyPrice)/h.buyPrice*100).toFixed(1); holdings.push(`Crypto: ${h.coin} | Qty:${h.qty} | Buy:₹${h.buyPrice} | Price:₹${h.price} | Return:${r}%`); });
+  S.mf.forEach(h=>{    var r=((h.nav-h.avgNav)/h.avgNav*100).toFixed(1);    holdings.push(`MF: ${h.name} | Units:${h.units} | AvgNAV:₹${h.avgNav} | NAV:₹${h.nav} | Return:${r}%`); });
+  S.fd.forEach(h=>{    holdings.push(`FD: ${h.name} | Principal:₹${h.principal} | Rate:${h.rate}% | Maturity:${h.maturity}`); });
+
+  return `You are an expert Indian portfolio advisor. Analyse this investor's portfolio and provide:
+1. Portfolio Health Score (0-100) with brief reasoning
+2. Top 3 HOLD recommendations with reason
+3. Top 2 EXIT / REDUCE recommendations with reason
+4. Tax-Loss Harvest opportunities (if any)
+5. LTCG Gain Harvest opportunities (holdings >1yr with >₹1.25L gain)
+6. Concentration / risk alerts
+7. One-line actionable summary
+
+PORTFOLIO SUMMARY:
+Total Invested: ₹${F.inr(g.totI)}
+Current Value: ₹${F.inr(g.totC)}
+Overall Return: ${((g.totC-g.totI)/g.totI*100).toFixed(2)}%
+USD/INR Rate: ₹${S.usdInr}
+
+HOLDINGS (${holdings.length} positions):
+${holdings.join('\n')}
+
+Keep the response concise, structured, and actionable. Use ₹ for Indian values. End with a disclaimer.`;
+}
+
+async function runPortfolioAI() {
+  var panel = document.getElementById('ai-insights-panel');
+  if (!panel) return;
+  if (_piEngine === 'builtin') { renderAIInsights(); return; }
+
+  var key = '';
+  if (_piEngine==='groq')   key = (document.getElementById('pi-groq-key')?.value||'').trim()   || localStorage.getItem('pi_groq_key')||'';
+  if (_piEngine==='claude') key = (document.getElementById('pi-claude-key')?.value||'').trim()  || localStorage.getItem('pi_claude_key')||'';
+
+  if (!key) {
+    panel.innerHTML = `<div style="background:var(--AUL);border-radius:8px;padding:14px;color:#92400E;font-size:13px;">⚠️ Please enter your <strong>${_piEngine==='groq'?'Groq':'Claude'}</strong> API key above to use this engine.</div>`;
+    return;
+  }
+
+  var prompt = buildPortfolioPrompt();
+  panel.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:20px;color:var(--T3);font-size:13px;"><div style="width:20px;height:20px;border:2px solid var(--P);border-top-color:transparent;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0;"></div> Consulting <strong>${_piEngine}</strong> AI — analysing your portfolio...</div>`;
+
+  try {
+    var text = '';
+    if (_piEngine === 'groq') {
+      var r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+key},
+        body:JSON.stringify({model:'llama-3.3-70b-versatile',messages:[{role:'user',content:prompt}],max_tokens:1200,temperature:0.6})
+      });
+      if (!r.ok) { var e=await r.json(); throw new Error(e?.error?.message||'HTTP '+r.status); }
+      var d=await r.json(); text=d.choices?.[0]?.message?.content||'No response';
+    } else if (_piEngine === 'claude') {
+      var r2 = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+        body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1200,messages:[{role:'user',content:prompt}]})
+      });
+      if (!r2.ok) { var e2=await r2.json(); throw new Error(e2?.error?.message||'HTTP '+r2.status); }
+      var d2=await r2.json(); text=d2.content?.[0]?.text||'No response';
+    }
+    panel.innerHTML = `<div style="font-size:13px;line-height:1.8;color:var(--T1);">${text.replace(/\n\n/g,'<br><br>').replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/#{1,3} (.*)/g,'<b style="font-size:13.5px;display:block;margin-top:10px;">$1</b>')}</div>
+    <div style="margin-top:14px;font-size:10.5px;color:var(--T3);padding:8px 12px;background:#F8FAFC;border-radius:6px;">⚡ Generated by ${_piEngine==='groq'?'Groq llama-3.3-70b':'Claude Sonnet 4'} · For educational purposes only · Not financial advice</div>`;
+  } catch(err) {
+    panel.innerHTML = `<div style="background:var(--RL);border-radius:8px;padding:14px;color:var(--R);font-size:13px;">❌ <strong>${_piEngine} Error:</strong> ${err.message}<br><small>Check your API key. Falling back to rule-based insights below.</small></div>`;
+    setTimeout(renderAIInsights, 300);
+  }
+}
+
 /* ══ NAV ROUTING ══ */
 const RENDERERS={dashboard:renderDashboard,india:renderIndia,us:()=>filterTable('us'),crypto:()=>filterTable('cry'),fd:renderFD,mf:renderMF,taxation:renderTaxation,analysis:renderAnalysis,reports:renderReports,transactions:()=>filterTable('txn'),ltp:renderLTP,datamgmt:renderDataMgmt,sync:()=>{if(S.gClientId)document.getElementById('gd-clientid').value=S.gClientId;GD.updateUI();}};
 document.querySelectorAll('.tab').forEach(t=>{
@@ -6674,6 +6916,14 @@ document.querySelectorAll('.tab').forEach(t=>{
     if(RENDERERS[tab]) RENDERERS[tab]();
   });
 });
+
+/* ══ GO TO TAB ══ */
+function goTab(tabName) {
+  var tab = document.querySelector('.tab[data-tab="'+tabName+'"]');
+  if (tab) tab.click();
+  // Scroll nav into view
+  if (tab) tab.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'});
+}
 
 /* ══ RENDER ALL (re-renders active tab) ══ */
 function renderAll(){
@@ -6711,13 +6961,15 @@ function toggleDiscAccept() {
 }
 function acceptDisclaimerOverlay() {
   var chk = document.getElementById('disc-chk');
-  if (!chk.checked) return;
-  try { localStorage.setItem('advDisclaimerAccepted', '1'); } catch(e) {}
+  if (!chk || !chk.checked) return;
+  try { localStorage.setItem('advStockDisclaimer_v1','accepted'); } catch(e) {}
   var ov = document.getElementById('disclaimer-overlay');
+  if (!ov) return;
   ov.style.transition = 'opacity .4s';
   ov.style.opacity = '0';
   setTimeout(function(){ ov.classList.add('hidden'); ov.style.opacity = ''; }, 400);
   document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
 }
 function declineDisclaimerOverlay() {
   document.getElementById('disc-content').style.display = 'none';
@@ -6727,17 +6979,31 @@ function showDiscContent() {
   document.getElementById('disc-content').style.display = 'block';
   document.getElementById('disc-declined').style.display = 'none';
 }
-// Check on load — skip overlay if already accepted
-(function() {
-  try {
-    if (localStorage.getItem('advDisclaimerAccepted') === '1') {
-      var ov = document.getElementById('disclaimer-overlay');
-      if (ov) ov.classList.add('hidden');
-      return;
-    }
-  } catch(e) {}
-  // Overlay is visible — prevent body scroll behind it
-  document.body.style.overflow = 'hidden';
+// Disclaimer IIFE moved to inline script directly after overlay HTML
+
+// ─── Nav scroll arrows ────────────────────────────────────────────────────────
+function scrollNav(dir) {
+  var nav = document.getElementById('nav');
+  if (nav) nav.scrollBy({left: dir * 180, behavior:'smooth'});
+}
+(function(){
+  var nav = document.getElementById('nav');
+  var lBtn = document.getElementById('nav-left');
+  var rBtn = document.getElementById('nav-right');
+  if (!nav) return;
+  function updateArrows() {
+    var atStart = nav.scrollLeft <= 2;
+    var atEnd   = nav.scrollLeft + nav.clientWidth >= nav.scrollWidth - 4;
+    if (lBtn) lBtn.style.display = atStart ? 'none'  : 'flex';
+    if (rBtn) rBtn.style.display = atEnd   ? 'none'  : 'flex';
+    if (lBtn) lBtn.style.alignItems = 'center';
+    if (lBtn) lBtn.style.justifyContent = 'center';
+    if (rBtn) rBtn.style.alignItems = 'center';
+    if (rBtn) rBtn.style.justifyContent = 'center';
+  }
+  nav.addEventListener('scroll', updateArrows, {passive:true});
+  window.addEventListener('resize', updateArrows);
+  setTimeout(updateArrows, 300);
 })();
 
 // ─── AdvanceStock Pro App Switcher ────────────────────────────────────────────
