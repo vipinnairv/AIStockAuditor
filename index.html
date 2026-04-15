@@ -1379,21 +1379,22 @@ td.r{text-align:right}
               </div>
             </div>
             <!-- Legend bar -->
-            <div style="display:flex;gap:14px;align-items:center;padding:6px 12px;background:rgba(19,23,34,0.6);font-size:11px;border-bottom:1px solid #363c4e;flex-wrap:wrap;">
-              <span style="color:#26a69a;font-weight:700;">■ Bull</span>
-              <span style="color:#ef5350;font-weight:700;">■ Bear</span>
-              <span style="color:#f59e0b;">── SMA 20</span>
-              <span style="color:#3b82f6;">── SMA 50</span>
-              <span style="color:rgba(255,255,255,.3);font-size:10px;margin-left:auto;">Scroll to zoom · Drag to pan</span>
+            <div style="display:flex;gap:14px;align-items:center;padding:7px 14px;background:rgba(19,23,34,0.75);font-size:11.5px;border-bottom:1px solid #363c4e;flex-wrap:wrap;">
+              <span style="color:#26a69a;font-weight:700;">▲ Bull</span>
+              <span style="color:#ef5350;font-weight:700;">▼ Bear</span>
+              <span style="color:#f59e0b;font-weight:600;">── SMA 20</span>
+              <span style="color:#3b82f6;font-weight:600;">── SMA 50</span>
+              <span style="color:rgba(59,130,246,0.6);">■ Vol</span>
+              <span style="color:rgba(255,255,255,.25);font-size:10px;margin-left:auto;">🖱 Scroll to zoom · Drag to pan</span>
             </div>
-            <div id="lw-chart-main" style="height:295px;"></div>
+            <div id="lw-chart-main" style="height:420px;"></div>
             <div style="padding:4px 12px;background:rgba(19,23,34,0.8);font-size:10px;color:#64748b;border-top:1px solid #363c4e;display:flex;gap:14px;align-items:center;">
               <span style="color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.5px;">MACD (12,26,9)</span>
               <span style="color:#f59e0b;">── MACD</span>
               <span style="color:#ef4444;">── Signal</span>
               <span style="color:rgba(38,166,154,0.7);">■ Histogram</span>
             </div>
-            <div id="lw-chart-macd" style="height:110px;"></div>
+            <div id="lw-chart-macd" style="height:140px;"></div>
           </div>
           <!-- Chart.js canvas (all other chart modes) -->
           <div style="position:relative;height:440px;">
@@ -4315,8 +4316,8 @@ function buildChart(type) {
       layout: { background:{color:bg}, textColor:txtC },
       grid:   { vertLines:{color:gridC}, horzLines:{color:gridC} },
       crosshair: { mode: LightweightCharts.CrosshairMode.Normal },
-      rightPriceScale: { borderColor:bdC, scaleMargins:{top:0.08, bottom:0.02} },
-      timeScale: { borderColor:bdC, timeVisible:showTime, secondsVisible:false, fixLeftEdge:true, fixRightEdge:true },
+      rightPriceScale: { borderColor:bdC, scaleMargins:{top:0.10, bottom:0.05} },
+      timeScale: { borderColor:bdC, timeVisible:showTime, secondsVisible:false, rightOffset:5, barSpacing:10, minBarSpacing:3 },
       handleScroll: true, handleScale: true,
     });
 
@@ -4329,13 +4330,26 @@ function buildChart(type) {
       wickUpColor:'#26a69a', wickDownColor:'#ef5350',
     });
 
-    // Use last 120 candles
+    // Load last 120 candles (for scroll history), but default view shows last 60
     const sl = Math.max(0, data.length - 120);
     const sd = data.slice(sl);
 
     const toTs = d => Math.floor(d.date.getTime() / 1000);
 
     candleSeries.setData(sd.map(d => ({ time:toTs(d), open:d.open, high:d.high, low:d.low, close:d.close })));
+
+    // ── Volume overlay (bottom 20% of main pane, semi-transparent) ───────────
+    const volSeries = lwMain.addHistogramSeries({
+      color: 'rgba(59,130,246,0.3)',
+      priceFormat: { type:'volume' },
+      priceScaleId: 'vol',
+    });
+    lwMain.priceScale('vol').applyOptions({ scaleMargins: { top: 0.82, bottom: 0 }, drawTicks: false, borderVisible: false, visible: false });
+    volSeries.setData(sd.map((d,i) => {
+      const v = data[sl+i].volume;
+      if (!v && v !== 0) return null;
+      return { time: toTs(d), value: v, color: d.close >= d.open ? 'rgba(38,166,154,0.25)' : 'rgba(239,83,80,0.25)' };
+    }).filter(Boolean));
 
     // ── SMA overlays ─────────────────────────────────────────────────────────
     const mkLine = (color, width=1.5) => lwMain.addLineSeries({ color, lineWidth:width, priceLineVisible:false, lastValueVisible:false, crosshairMarkerVisible:false });
@@ -4408,7 +4422,14 @@ function buildChart(type) {
     });
     _lwResizeObs.observe(mainEl);
 
+    // Show last 60 candles by default (TradingView-like zoom level)
     lwMain.timeScale().fitContent();
+    setTimeout(() => {
+      const total = sd.length;
+      const visible = Math.min(60, total);
+      lwMain.timeScale().setVisibleLogicalRange({ from: total - visible - 0.5, to: total - 0.5 });
+      lwMacd.timeScale().setVisibleLogicalRange({ from: total - visible - 0.5, to: total - 0.5 });
+    }, 50);
 
     mainChartInstance = {
       _lwMain: lwMain, _lwMacd: lwMacd, _obs: _lwResizeObs,
@@ -4420,7 +4441,15 @@ function buildChart(type) {
         document.getElementById('mainChart').parentElement.style.display = 'block';
         document.getElementById('lw-tooltip').style.display = 'none';
       },
-      resetZoom() { lwMain.timeScale().fitContent(); lwMacd.timeScale().fitContent(); }
+      resetZoom() {
+        lwMain.timeScale().fitContent();
+        setTimeout(() => {
+          const total = sd.length;
+          const visible = Math.min(60, total);
+          lwMain.timeScale().setVisibleLogicalRange({ from: total - visible - 0.5, to: total - 0.5 });
+          lwMacd.timeScale().setVisibleLogicalRange({ from: total - visible - 0.5, to: total - 0.5 });
+        }, 50);
+      }
     };
 
     const interp = CHART_INTERPRET['candle'];
