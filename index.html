@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/hammer.js/2.0.8/hammer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
 
 
@@ -1272,15 +1273,45 @@ td.r{text-align:right}
               <button class="btn btn-secondary" onclick="fetchSymbolData()" style="height:42px;" id="fetchBtn">📡 Fetch</button>
             </div>
           </div>
-          <!-- Alpha Vantage key — direct CORS fetch, works from file:// URL, no proxy needed -->
-          <div style="display:flex;align-items:center;gap:8px;margin:8px 0 4px;flex-wrap:wrap;">
-            <span style="font-size:0.78rem;color:var(--text3);">🔑 Alpha Vantage key <small style="opacity:.7">(free · fixes <em>file://</em> fetch failures)</small>:</span>
-            <input id="avApiKey" type="text" placeholder="Paste your free API key here…"
-              style="flex:1;min-width:150px;height:30px;font-size:0.8rem;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg2);color:var(--text);"
-              oninput="localStorage.setItem('avApiKey',this.value)">
-            <a href="https://www.alphavantage.co/support/#api-key" target="_blank"
-              style="font-size:0.78rem;color:var(--accent);white-space:nowrap;text-decoration:none;">Get free key →</a>
-          </div>
+          <!-- BYOK API Keys (stored in localStorage) -->
+          <details id="byokPanel" style="margin:8px 0 6px;border:1px solid var(--border);border-radius:8px;background:var(--surface2);">
+            <summary style="padding:8px 12px;cursor:pointer;font-size:12px;color:var(--text3);user-select:none;list-style:none;display:flex;align-items:center;gap:6px;">
+              <span style="font-size:14px;">🔑</span>
+              <strong style="color:var(--text2);">API Keys</strong>
+              <span style="opacity:.6;font-size:11px;">(BYOK — stored locally, never sent anywhere)</span>
+              <span style="margin-left:auto;font-size:10px;color:var(--accent);font-family:'JetBrains Mono',monospace;" id="byokStatus"></span>
+              <span style="font-size:11px;color:var(--text3);">▼</span>
+            </summary>
+            <div style="padding:4px 12px 12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;">
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:4px;display:flex;justify-content:space-between;">
+                  <span>Alpha Vantage <small style="opacity:.6">(India+US · 25 req/day free)</small></span>
+                  <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none;">get free →</a>
+                </div>
+                <input id="avApiKey" type="password" placeholder="AV key…" autocomplete="off" spellcheck="false"
+                  style="width:100%;height:32px;font-size:12px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;"
+                  oninput="_saveKey('avApiKey',this.value)" />
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:4px;display:flex;justify-content:space-between;">
+                  <span>TwelveData <small style="opacity:.6">(India+US · 800 req/day free)</small></span>
+                  <a href="https://twelvedata.com/pricing" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none;">get free →</a>
+                </div>
+                <input id="tdApiKey" type="password" placeholder="TwelveData key…" autocomplete="off" spellcheck="false"
+                  style="width:100%;height:32px;font-size:12px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;"
+                  oninput="_saveKey('tdApiKey',this.value)" />
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text3);margin-bottom:4px;display:flex;justify-content:space-between;">
+                  <span>FMP <small style="opacity:.6">(US stocks · 250 req/day free)</small></span>
+                  <a href="https://financialmodelingprep.com/developer/docs" target="_blank" style="color:var(--accent);font-size:10px;text-decoration:none;">get free →</a>
+                </div>
+                <input id="fmpApiKey" type="password" placeholder="FMP key…" autocomplete="off" spellcheck="false"
+                  style="width:100%;height:32px;font-size:12px;padding:0 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:'JetBrains Mono',monospace;"
+                  oninput="_saveKey('fmpApiKey',this.value)" />
+              </div>
+            </div>
+          </details>
           <div id="fetchStatus"></div>
         </div>
 
@@ -3126,26 +3157,59 @@ const STOCK_DB = [
   ['Manappuram Finance','MANAPPURAM','MANAPPURAM','NBFC'],
 ];
 
-// Fuzzy symbol search
+// ── Fuse.js fuzzy search — lazy init per market mode ────────────────────────
+const _fuseInstances = {};
+function _getFuse(db, mode) {
+  if (_fuseInstances[mode]) return _fuseInstances[mode];
+  const docs = db.map((s, i) => ({ i, name: s[0], sym: s[1], sym2: s[2] || s[1], sector: s[3] || '' }));
+  _fuseInstances[mode] = new Fuse(docs, {
+    keys: [
+      { name: 'sym',    weight: 3.0 },
+      { name: 'sym2',   weight: 2.5 },
+      { name: 'name',   weight: 1.0 },
+      { name: 'sector', weight: 0.2 },
+    ],
+    threshold: 0.38,
+    distance: 120,
+    minMatchCharLength: 1,
+    ignoreLocation: true,
+    useExtendedSearch: false,
+    shouldSort: true,
+  });
+  return _fuseInstances[mode];
+}
+
 function searchStocks(query) {
-  const db = marketMode === 'us' ? US_STOCK_DB : marketMode === 'crypto' ? CRYPTO_DB : STOCK_DB;
-  // Crypto: always show full list (only 10 coins)
-  if (marketMode === 'crypto') {
-    if (!query || query.trim().length === 0) return db;
-    const q = query.toLowerCase().replace(/[^a-z0-9]/g,'');
-    return db.filter(s => {
-      const name = s[0].toLowerCase().replace(/[^a-z0-9]/g,'');
-      const sym  = s[1].toLowerCase().replace(/[^a-z0-9]/g,'');
-      return name.includes(q) || sym.includes(q);
-    });
+  const db   = marketMode === 'us' ? US_STOCK_DB : marketMode === 'crypto' ? CRYPTO_DB : STOCK_DB;
+  const mode = marketMode;
+
+  // Crypto: always show full list when no query
+  if (mode === 'crypto' && (!query || !query.trim())) return db;
+  if (!query || query.trim().length < 1) return [];
+
+  const q = query.trim().toUpperCase();
+
+  // 1. Exact ticker match — highest priority (instant for "INFY", "TCS", "AAPL")
+  const exactTicker = db.filter(s => s[1].toUpperCase() === q || (s[2] && s[2].toUpperCase() === q));
+  if (exactTicker.length) return exactTicker.slice(0, 8);
+
+  // 2. Ticker starts-with (e.g., "HDFC" → HDFCBANK, HDFCLIFE, HDFCAMC)
+  const prefixTicker = db.filter(s => s[1].toUpperCase().startsWith(q) || (s[2] && s[2].toUpperCase().startsWith(q)));
+  if (prefixTicker.length >= 3) return prefixTicker.slice(0, 8);
+
+  // 3. Fuse.js fuzzy (company name + sector fallback)
+  if (typeof Fuse !== 'undefined') {
+    const fuse    = _getFuse(db, mode);
+    const results = fuse.search(query, { limit: 8 }).map(r => db[r.item.i]);
+    // Merge prefix matches at top (dedup)
+    const seen = new Set(prefixTicker.map(s => s[1]));
+    const merged = [...prefixTicker, ...results.filter(s => !seen.has(s[1]))];
+    return merged.slice(0, 8);
   }
-  if (!query || query.length < 2) return [];
-  const q = query.toLowerCase().replace(/[^a-z0-9]/g,'');
-  return db.filter(s => {
-    const name = s[0].toLowerCase().replace(/[^a-z0-9]/g,'');
-    const sym  = s[1].toLowerCase();
-    return name.includes(q) || sym.includes(q) || name.startsWith(q);
-  }).slice(0, 8);
+
+  // 4. Fallback if Fuse not loaded (CDN failure)
+  const ql = query.toLowerCase();
+  return db.filter(s => s[0].toLowerCase().includes(ql) || s[1].toLowerCase().includes(ql)).slice(0, 8);
 }
 
 let ddSelectedIdx = -1;
@@ -3217,13 +3281,110 @@ document.addEventListener('click', e => {
 });
 
 // ============================================================
-// SYMBOL FETCH — retry with multiple proxies, timeout handling
+// BYOK KEY HELPERS
 // ============================================================
-// Populate Alpha Vantage key from localStorage on load
+function _saveKey(id, val) {
+  try { localStorage.setItem(id, val.trim()); } catch(e) {}
+  _updateByokStatus();
+}
+function _loadKey(id) {
+  return (document.getElementById(id)?.value || localStorage.getItem(id) || '').trim();
+}
+function _updateByokStatus() {
+  const el = document.getElementById('byokStatus');
+  if (!el) return;
+  const keys = ['avApiKey','tdApiKey','fmpApiKey'].filter(k => _loadKey(k));
+  el.textContent = keys.length ? `✓ ${keys.length} key${keys.length>1?'s':''} saved` : '';
+}
+// Restore all keys on load
 document.addEventListener('DOMContentLoaded', () => {
-  const el = document.getElementById('avApiKey');
-  if (el) el.value = localStorage.getItem('avApiKey') || '';
+  ['avApiKey','tdApiKey','fmpApiKey'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = localStorage.getItem(id) || '';
+  });
+  _updateByokStatus();
 });
+
+// ============================================================
+// OHLCV CACHE — localStorage first, IndexedDB fallback
+// ============================================================
+const _CACHE_TTL  = 6 * 60 * 60 * 1000; // 6 h
+const _CACHE_PFX  = 'ohlcv_v4_';
+let   _idbPromise = null;
+
+function _idbOpen() {
+  if (_idbPromise) return _idbPromise;
+  _idbPromise = new Promise((res, rej) => {
+    try {
+      const req = indexedDB.open('StockCacheDB', 2);
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('ohlcv')) db.createObjectStore('ohlcv', { keyPath: 'sym' });
+      };
+      req.onsuccess = e => res(e.target.result);
+      req.onerror   = () => res(null); // non-fatal
+    } catch(e) { res(null); }
+  });
+  return _idbPromise;
+}
+
+async function _cacheGet(sym) {
+  // Layer 1: localStorage (zero-latency)
+  try {
+    const raw = localStorage.getItem(_CACHE_PFX + sym);
+    if (raw) {
+      const obj = JSON.parse(raw);
+      if (Date.now() - obj.ts < _CACHE_TTL) return obj.rows;
+    }
+  } catch(e) {}
+  // Layer 2: IndexedDB (large payloads that overflow localStorage)
+  try {
+    const db = await _idbOpen();
+    if (!db) return null;
+    return new Promise(res => {
+      try {
+        const tx  = db.transaction('ohlcv', 'readonly');
+        const req = tx.objectStore('ohlcv').get(sym);
+        req.onsuccess = () => {
+          const v = req.result;
+          res(v && Date.now() - v.ts < _CACHE_TTL ? v.rows : null);
+        };
+        req.onerror = () => res(null);
+      } catch(e) { res(null); }
+    });
+  } catch(e) { return null; }
+}
+
+async function _cachePut(sym, rows) {
+  const payload = { sym, rows, ts: Date.now() };
+  // Prefer localStorage (instant on next lookup)
+  try {
+    localStorage.setItem(_CACHE_PFX + sym, JSON.stringify(payload));
+    return;
+  } catch(e) {
+    // Quota exceeded — evict oldest ohlcv entries
+    try {
+      const evict = Object.keys(localStorage)
+        .filter(k => k.startsWith(_CACHE_PFX))
+        .map(k => { try { return { k, ts: JSON.parse(localStorage.getItem(k)).ts }; } catch(e){ return {k, ts:0}; } })
+        .sort((a,b) => a.ts - b.ts);
+      evict.slice(0, Math.ceil(evict.length / 2) || 1).forEach(e => localStorage.removeItem(e.k));
+      localStorage.setItem(_CACHE_PFX + sym, JSON.stringify(payload));
+      return;
+    } catch(e2) {}
+  }
+  // Fallback: IndexedDB
+  try {
+    const db = await _idbOpen();
+    if (!db) return;
+    const tx = db.transaction('ohlcv', 'readwrite');
+    tx.objectStore('ohlcv').put(payload);
+  } catch(e) {}
+}
+
+// ============================================================
+// SYMBOL FETCH — parallel race with cache + BYOK sources
+// ============================================================
 
 async function fetchSymbolData() {
   const resolved = document.getElementById('resolvedSymbol').value.trim().toUpperCase();
@@ -3231,185 +3392,221 @@ async function fetchSymbolData() {
   const sym = resolved || typed;
   if (!sym) { document.getElementById('fetchStatus').innerHTML = `<div class="alert alert-error">⚠️ Please type a company name or symbol first.</div>`; return; }
 
-  const exch     = document.getElementById('exchangeInput').value;
-  // US stocks & Crypto: symbol already includes exchange info (AAPL, BTC-USD). Indian: .NS or .BO
-  const suffix   = (marketMode === 'us' || marketMode === 'crypto') ? '' : (exch === 'BSE' ? '.BO' : '.NS');
-  const yahooSym = sym + suffix;
-  const to   = Math.floor(Date.now() / 1000);
-  const from = to - 400 * 24 * 3600;
-  const enc  = encodeURIComponent;
-
-  // ── Alpha Vantage (direct CORS — no proxy, works from file:// URL)
-  // Crypto is skipped for AV (different endpoint); AV used only for stocks
-  const avKeyEl  = document.getElementById('avApiKey');
-  const avApiKey = (avKeyEl?.value || localStorage.getItem('avApiKey') || '').trim();
-  const avSuffix = marketMode === 'us' ? '' : (exch === 'BSE' ? '.BSE' : '.NSE');
-  const avUrl    = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${sym}${avSuffix}&outputsize=full&datatype=json&apikey=${avApiKey}`;
-
-  // ── Yahoo Finance v8 JSON (two query hostnames)
-  const yfQ1 = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?period1=${from}&period2=${to}&interval=1d`;
-  const yfQ2 = yfQ1.replace('query1','query2');
-
-  // ── Stooq.com CSV — not available for Crypto; NSE=.in / BSE=.bo / US=.us
-  const isCryptoMode = marketMode === 'crypto';
-  const stooqSym = sym.toLowerCase() + (marketMode === 'us' ? '.us' : (exch === 'BSE' ? '.bo' : '.in'));
-  const fd = new Date(from*1000).toISOString().slice(0,10).replace(/-/g,'');
-  const td = new Date(to  *1000).toISOString().slice(0,10).replace(/-/g,'');
-  const stooqUrl = `https://stooq.com/q/d/l/?s=${stooqSym}&f=${fd}&t=${td}&i=d`;
-
-  // Build strategy list — AV first when key present (direct CORS, no proxy, works from file://)
-  // Crypto: skip AV (different endpoint) and Stooq (no crypto data)
-  const strategies = [];
-  if (avApiKey && !isCryptoMode) strategies.push({ label:'Alpha Vantage (direct)', url:avUrl, src:'av', wrap:false });
-  strategies.push(
-    { label:'Yahoo (AllOrigins)',      url:`https://api.allorigins.win/get?url=${enc(yfQ1)}`,          src:'yf',    wrap:true  },
-    { label:'Yahoo (AllOrigins raw)',  url:`https://api.allorigins.win/raw?url=${enc(yfQ2)}`,          src:'yf',    wrap:false },
-    { label:'Yahoo (CORSProxy)',       url:`https://corsproxy.io/?${enc(yfQ2)}`,                       src:'yf',    wrap:false },
-    { label:'Yahoo (CodeTabs)',        url:`https://api.codetabs.com/v1/proxy?quest=${enc(yfQ1)}`,     src:'yf',    wrap:false }
-  );
-  if (!isCryptoMode) strategies.push(
-    { label:'Stooq (AllOrigins)',      url:`https://api.allorigins.win/get?url=${enc(stooqUrl)}`,      src:'stooq', wrap:true  },
-    { label:'Stooq (AllOrigins raw)',  url:`https://api.allorigins.win/raw?url=${enc(stooqUrl)}`,      src:'stooq', wrap:false },
-    { label:'Stooq (CORSProxy)',       url:`https://corsproxy.io/?${enc(stooqUrl)}`,                   src:'stooq', wrap:false }
-  );
+  const exch        = document.getElementById('exchangeInput').value;
+  const isCrypto    = marketMode === 'crypto';
+  const isUS        = marketMode === 'us';
+  const suffix      = (isUS || isCrypto) ? '' : (exch === 'BSE' ? '.BO' : '.NS');
+  const yahooSym    = sym + suffix;
+  const cacheKey    = yahooSym; // stable cache key per exchange-qualified symbol
 
   const st  = document.getElementById('fetchStatus');
   const btn = document.getElementById('fetchBtn');
   btn.disabled = true;
   btn.textContent = '⏳ Fetching...';
-  st.innerHTML = `<div class="alert alert-warning" style="align-items:center;gap:8px;">
-    <div class="loading-spinner" style="width:16px;height:16px;border-width:2px;flex-shrink:0;display:inline-block;vertical-align:middle;margin-right:8px;"></div>
-    Trying <strong>${strategies.length} sources simultaneously</strong> for <strong>${yahooSym}</strong> — using fastest response...
-  </div>`;
 
-  // ── Helper: attempt one strategy, resolve with {rows, strat} or reject ──
-  async function _tryOne(strat) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000); // 6s per source
-      let res;
-      try {
-        res = await fetch(strat.url, { signal: controller.signal });
-      } finally { clearTimeout(timer); }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-      let rows;
-
-      if (strat.src === 'av') {
-        // ── Alpha Vantage TIME_SERIES_DAILY_ADJUSTED
-        const raw = await res.json();
-        if (raw['Note'])        throw new Error('Alpha Vantage rate limit — wait 1 min and retry');
-        if (raw['Information']) throw new Error('Alpha Vantage: ' + raw['Information']);
-        const ts = raw['Time Series (Daily)'];
-        if (!ts || !Object.keys(ts).length) throw new Error('No time series in AV response — check symbol or key');
-        rows = Object.entries(ts)
-          .sort(([a],[b]) => new Date(a) - new Date(b)) // AV returns newest-first, sort ascending
-          .map(([date, v]) => {
-            const d = new Date(date);
-            const fmt = d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-            return {
-              'Date': fmt,
-              'Open Price':  parseFloat(v['1. open']).toFixed(2),
-              'High Price':  parseFloat(v['2. high']).toFixed(2),
-              'Low Price':   parseFloat(v['3. low']).toFixed(2),
-              'Close Price': parseFloat(v['5. adjusted close'] || v['4. close']).toFixed(2),
-              'Total Traded Quantity': (parseFloat(v['6. volume']) || 0).toString(),
-            };
-          })
-          .filter(r => parseFloat(r['Close Price']) > 0)
-          .slice(-400); // keep last 400 days
-
-      } else if (strat.src === 'yf') {
-        // ── Yahoo Finance v8 JSON
-        let raw;
-        if (strat.wrap) {
-          const outer = await res.json();
-          const rawText = outer.contents || outer.body || '';
-          if (!rawText) throw new Error('Proxy returned empty content');
-          raw = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
-        } else {
-          raw = await res.json();
-        }
-        const result = raw?.chart?.result?.[0];
-        if (!result) throw new Error('No chart data in YF response');
-        const timestamps = result.timestamp || [];
-        if (!timestamps.length) throw new Error('Empty timestamps');
-        const q = result.indicators?.quote?.[0] || {};
-        const { open=[], high=[], low=[], close=[], volume=[] } = q;
-        const adjClose = result.indicators?.adjclose?.[0]?.adjclose || close;
-        rows = timestamps.map((ts, idx) => ({
-          'Date': new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-'),
-          'Open Price':  (open[idx]  || close[idx] || 0).toFixed(2),
-          'High Price':  (high[idx]  || close[idx] || 0).toFixed(2),
-          'Low Price':   (low[idx]   || close[idx] || 0).toFixed(2),
-          'Close Price': (adjClose[idx] || close[idx] || 0).toFixed(2),
-          'Total Traded Quantity': (volume[idx] || 0).toString(),
-        })).filter(r => parseFloat(r['Close Price']) > 0);
-
-      } else {
-        // ── Stooq CSV: Date,Open,High,Low,Close,Volume (newest-first)
-        let csvText;
-        if (strat.wrap) {
-          const outer = await res.json();
-          csvText = outer.contents || outer.body || '';
-        } else {
-          csvText = await res.text();
-        }
-        if (!csvText || csvText.includes('No data') || csvText.trim().length < 30)
-          throw new Error('Stooq returned no data');
-        const lines = csvText.trim().split('\n').filter(l => l && !/^Date/i.test(l) && !l.includes('N/D'));
-        if (lines.length < 5) throw new Error('Stooq CSV too short: ' + lines.length + ' rows');
-        rows = lines.map(line => {
-          const [date, open, high, low, close, volume] = line.trim().split(',');
-          if (!date || !close || isNaN(parseFloat(close))) return null;
-          const d = new Date(date.trim());
-          if (isNaN(d.getTime())) return null;
-          const fmt = d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
-          return {
-            'Date': fmt,
-            'Open Price':  (parseFloat(open)  || parseFloat(close)).toFixed(2),
-            'High Price':  (parseFloat(high)  || parseFloat(close)).toFixed(2),
-            'Low Price':   (parseFloat(low)   || parseFloat(close)).toFixed(2),
-            'Close Price': parseFloat(close).toFixed(2),
-            'Total Traded Quantity': (parseFloat(volume) || 0).toString(),
-          };
-        }).filter(Boolean).reverse(); // newest-first → oldest-first
-      }
-
-      if (!rows || rows.length < 10) throw new Error(`Too few rows: ${rows?.length || 0}`);
-      return { rows, strat };
-  } // end _tryOne
-
-  // ── Race ALL strategies in parallel — use whichever wins ─────────────────
-  try {
-    const { rows, strat } = await Promise.any(strategies.map(s => _tryOne(s)));
-
-    parsedData = rows;
-    const latestClose = parseFloat(parsedData[parsedData.length-1]['Close Price']);
-    const companyName = selectedStockEntry ? selectedStockEntry[0] : sym;
-    const srcShort    = strat.label.split(' (')[0];
-    const srcIcon     = strat.src === 'av' ? '🔑' : strat.src === 'stooq' ? '📊' : '📡';
+  // ── 1. Serve from cache if fresh (skip when force-refresh requested) ─────
+  const _forceRefresh = !!fetchSymbolData._forceRefresh;
+  fetchSymbolData._forceRefresh = false; // consume flag
+  const cached = _forceRefresh ? null : await _cacheGet(cacheKey);
+  if (cached && cached.length >= 10) {
+    parsedData = cached;
+    const latestClose  = parseFloat(parsedData[parsedData.length-1]['Close Price']);
+    const companyName  = selectedStockEntry ? selectedStockEntry[0] : sym;
     document.getElementById('companyName').value  = companyName;
     document.getElementById('stockSymbol').value  = sym;
     document.getElementById('currentPrice').value = latestClose.toFixed(2);
     document.getElementById('marketSelect').value = exch;
-    uploadedFiles = [{ name:`${yahooSym}_live.csv`, size:parsedData.length*50 }];
-    document.getElementById('fileList').innerHTML = `<div class="file-item"><div class="file-item-info">${srcIcon} <span>${companyName} (${yahooSym}) — <strong>${parsedData.length} days</strong> via ${srcShort}</span> <span style="color:var(--green)">✓ Live</span></div></div>`;
-    st.innerHTML = `<div class="alert alert-success">✅ <strong>${srcShort}</strong>: fetched <strong>${parsedData.length} trading days</strong> for <strong>${companyName}</strong>. Latest close: ${CUR()}${latestClose.toFixed(2)}. Click Run Analysis!</div>`;
+    uploadedFiles = [{ name:`${yahooSym}_live.csv`, size: parsedData.length*50 }];
+    document.getElementById('fileList').innerHTML = `<div class="file-item"><div class="file-item-info">⚡ <span>${companyName} (${yahooSym}) — <strong>${parsedData.length} days</strong> <em style="color:var(--text3);font-size:11px;">(cached)</em></span> <span style="color:var(--green)">✓ Instant</span></div></div>`;
+    st.innerHTML = `<div class="alert alert-success">⚡ <strong>Loaded from cache</strong> — ${parsedData.length} trading days for <strong>${companyName}</strong>. Latest close: ${CUR()}${latestClose.toFixed(2)}. <button onclick="fetchSymbolData._forceRefresh=true;fetchSymbolData()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:12px;text-decoration:underline;">🔄 Force refresh</button></div>`;
+    checkReady();
+    btn.disabled = false; btn.textContent = '📡 Fetch';
+    return;
+  }
+
+  // ── 2. Build live-fetch strategies ───────────────────────────────────────
+  const to   = Math.floor(Date.now() / 1000);
+  const from = to - 400 * 24 * 3600; // ~13 months
+  const enc  = encodeURIComponent;
+
+  // BYOK keys
+  const avKey  = _loadKey('avApiKey');
+  const tdKey  = _loadKey('tdApiKey');
+  const fmpKey = _loadKey('fmpApiKey');
+
+  // Alpha Vantage — direct CORS, no proxy (works from file://)
+  const avSuffix  = isUS ? '' : (exch === 'BSE' ? '.BSE' : '.NSE');
+  const avUrl     = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${sym}${avSuffix}&outputsize=full&datatype=json&apikey=${avKey}`;
+
+  // TwelveData — direct CORS, generous free tier (800 req/day)
+  // India: exchange=NSE or BSE; US: no exchange param needed
+  const tdExchange = isCrypto ? '' : (isUS ? '' : (exch === 'BSE' ? '&exchange=BSE' : '&exchange=NSE'));
+  const tdSym      = isCrypto ? sym.replace('-USD','') + '/USD' : sym;
+  const tdUrl      = `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdSym)}${tdExchange}&interval=1day&outputsize=365&format=JSON&apikey=${tdKey}`;
+
+  // FMP — direct CORS (US stocks only, no India/crypto in free tier)
+  const fmpFrom = new Date(from*1000).toISOString().slice(0,10);
+  const fmpUrl  = `https://financialmodelingprep.com/api/v3/historical-price-full/${sym}?from=${fmpFrom}&apikey=${fmpKey}`;
+
+  // Yahoo Finance v8 via CORS proxies
+  const yfQ1  = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?period1=${from}&period2=${to}&interval=1d`;
+  const yfQ2  = yfQ1.replace('query1','query2');
+
+  // Stooq CSV (India+US, not crypto)
+  const stooqSym = sym.toLowerCase() + (isUS ? '.us' : (exch === 'BSE' ? '.bo' : '.in'));
+  const fd = new Date(from*1000).toISOString().slice(0,10).replace(/-/g,'');
+  const td = new Date(to  *1000).toISOString().slice(0,10).replace(/-/g,'');
+  const stooqUrl = `https://stooq.com/q/d/l/?s=${stooqSym}&f=${fd}&t=${td}&i=d`;
+
+  const strategies = [];
+  // BYOK direct sources first — no proxy latency
+  if (avKey  && !isCrypto)  strategies.push({ label:'Alpha Vantage',  url:avUrl,  src:'av',  wrap:false });
+  if (tdKey)                strategies.push({ label:'TwelveData',     url:tdUrl,  src:'td',  wrap:false });
+  if (fmpKey && isUS)       strategies.push({ label:'FMP',            url:fmpUrl, src:'fmp', wrap:false });
+  // Proxy-based Yahoo fallbacks
+  strategies.push(
+    { label:'Yahoo Finance',           url:`https://api.allorigins.win/get?url=${enc(yfQ1)}`,        src:'yf', wrap:true  },
+    { label:'Yahoo Finance',           url:`https://api.allorigins.win/raw?url=${enc(yfQ2)}`,        src:'yf', wrap:false },
+    { label:'Yahoo Finance',           url:`https://corsproxy.io/?${enc(yfQ2)}`,                     src:'yf', wrap:false },
+    { label:'Yahoo Finance',           url:`https://api.codetabs.com/v1/proxy?quest=${enc(yfQ1)}`,  src:'yf', wrap:false }
+  );
+  if (!isCrypto) strategies.push(
+    { label:'Stooq',                   url:`https://api.allorigins.win/get?url=${enc(stooqUrl)}`,    src:'stooq', wrap:true  },
+    { label:'Stooq',                   url:`https://api.allorigins.win/raw?url=${enc(stooqUrl)}`,    src:'stooq', wrap:false },
+    { label:'Stooq',                   url:`https://corsproxy.io/?${enc(stooqUrl)}`,                 src:'stooq', wrap:false }
+  );
+
+  st.innerHTML = `<div class="alert alert-warning" style="align-items:center;gap:8px;">
+    <div class="loading-spinner" style="width:16px;height:16px;border-width:2px;flex-shrink:0;display:inline-block;vertical-align:middle;margin-right:8px;"></div>
+    Racing <strong>${strategies.length} sources</strong> for <strong>${yahooSym}</strong>… fastest wins.
+  </div>`;
+
+  // ── Helper: fetch one strategy, return {rows, strat} or throw ────────────
+  async function _tryOne(strat) {
+    const ctrl  = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    let res;
+    try { res = await fetch(strat.url, { signal: ctrl.signal }); }
+    finally { clearTimeout(timer); }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    let rows;
+
+    if (strat.src === 'av') {
+      // Alpha Vantage TIME_SERIES_DAILY_ADJUSTED
+      const raw = await res.json();
+      if (raw['Note'])        throw new Error('AV rate-limit');
+      if (raw['Information']) throw new Error('AV: ' + raw['Information']);
+      const ts = raw['Time Series (Daily)'];
+      if (!ts || !Object.keys(ts).length) throw new Error('AV: empty time series');
+      rows = Object.entries(ts)
+        .sort(([a],[b]) => a < b ? -1 : 1)
+        .map(([date, v]) => {
+          const fmt = new Date(date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+          return { 'Date':fmt, 'Open Price':(+v['1. open']).toFixed(2), 'High Price':(+v['2. high']).toFixed(2), 'Low Price':(+v['3. low']).toFixed(2),
+            'Close Price':(+(v['5. adjusted close']||v['4. close'])).toFixed(2), 'Total Traded Quantity':(+(v['6. volume']||0)).toString() };
+        }).filter(r => +r['Close Price'] > 0).slice(-400);
+
+    } else if (strat.src === 'td') {
+      // TwelveData time_series
+      const raw = await res.json();
+      if (raw.status === 'error') throw new Error('TwelveData: ' + raw.message);
+      const vals = raw.values;
+      if (!vals || !vals.length) throw new Error('TwelveData: no values');
+      rows = [...vals].reverse().map(v => { // TD returns newest-first
+        const fmt = new Date(v.datetime).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+        return { 'Date':fmt, 'Open Price':(+v.open).toFixed(2), 'High Price':(+v.high).toFixed(2), 'Low Price':(+v.low).toFixed(2),
+          'Close Price':(+v.close).toFixed(2), 'Total Traded Quantity':(+(v.volume||0)).toString() };
+      }).filter(r => +r['Close Price'] > 0);
+
+    } else if (strat.src === 'fmp') {
+      // Financial Modeling Prep historical-price-full
+      const raw = await res.json();
+      if (raw['Error Message']) throw new Error('FMP: ' + raw['Error Message']);
+      const hist = raw.historical;
+      if (!hist || !hist.length) throw new Error('FMP: no historical data');
+      rows = [...hist].reverse().map(v => { // FMP returns newest-first
+        const fmt = new Date(v.date).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+        return { 'Date':fmt, 'Open Price':(+v.open).toFixed(2), 'High Price':(+v.high).toFixed(2), 'Low Price':(+v.low).toFixed(2),
+          'Close Price':(+v.adjClose||+v.close).toFixed(2), 'Total Traded Quantity':(+(v.volume||0)).toString() };
+      }).filter(r => +r['Close Price'] > 0).slice(-400);
+
+    } else if (strat.src === 'yf') {
+      // Yahoo Finance v8 chart JSON
+      let raw;
+      if (strat.wrap) {
+        const outer = await res.json();
+        const rawText = outer.contents || outer.body || '';
+        if (!rawText) throw new Error('Proxy: empty content');
+        raw = typeof rawText === 'string' ? JSON.parse(rawText) : rawText;
+      } else { raw = await res.json(); }
+      const result = raw?.chart?.result?.[0];
+      if (!result) throw new Error('YF: no chart result');
+      const timestamps = result.timestamp || [];
+      if (!timestamps.length) throw new Error('YF: empty timestamps');
+      const q = result.indicators?.quote?.[0] || {};
+      const adjClose = result.indicators?.adjclose?.[0]?.adjclose || q.close;
+      rows = timestamps.map((ts, i) => ({
+        'Date': new Date(ts*1000).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-'),
+        'Open Price':  (q.open?.[i]  || q.close?.[i] || 0).toFixed(2),
+        'High Price':  (q.high?.[i]  || q.close?.[i] || 0).toFixed(2),
+        'Low Price':   (q.low?.[i]   || q.close?.[i] || 0).toFixed(2),
+        'Close Price': (adjClose?.[i] || q.close?.[i] || 0).toFixed(2),
+        'Total Traded Quantity': (q.volume?.[i] || 0).toString(),
+      })).filter(r => +r['Close Price'] > 0);
+
+    } else {
+      // Stooq CSV (Date,Open,High,Low,Close,Volume — newest-first)
+      let csvText;
+      if (strat.wrap) { const o = await res.json(); csvText = o.contents || o.body || ''; }
+      else { csvText = await res.text(); }
+      if (!csvText || csvText.includes('No data') || csvText.trim().length < 30) throw new Error('Stooq: no data');
+      const lines = csvText.trim().split('\n').filter(l => l && !/^Date/i.test(l) && !l.includes('N/D'));
+      if (lines.length < 5) throw new Error('Stooq: too few rows');
+      rows = lines.map(line => {
+        const [date, open, high, low, close, volume] = line.trim().split(',');
+        if (!date || !close || isNaN(+close)) return null;
+        const d = new Date(date.trim()); if (isNaN(d)) return null;
+        const fmt = d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}).replace(/ /g,'-');
+        return { 'Date':fmt, 'Open Price':(+open||+close).toFixed(2), 'High Price':(+high||+close).toFixed(2),
+          'Low Price':(+low||+close).toFixed(2), 'Close Price':(+close).toFixed(2), 'Total Traded Quantity':(+(volume||0)).toString() };
+      }).filter(Boolean).reverse();
+    }
+
+    if (!rows || rows.length < 10) throw new Error(`Too few rows: ${rows?.length||0}`);
+    return { rows, strat };
+  }
+
+  // ── 3. Race all strategies — cache winner ────────────────────────────────
+  try {
+    const { rows, strat } = await Promise.any(strategies.map(s => _tryOne(s)));
+
+    parsedData = rows;
+    _cachePut(cacheKey, rows); // fire-and-forget cache write
+
+    const latestClose = parseFloat(parsedData[parsedData.length-1]['Close Price']);
+    const companyName = selectedStockEntry ? selectedStockEntry[0] : sym;
+    const srcIcon = { av:'🔑', td:'🔑', fmp:'🔑', stooq:'📊', yf:'📡' }[strat.src] || '📡';
+    document.getElementById('companyName').value  = companyName;
+    document.getElementById('stockSymbol').value  = sym;
+    document.getElementById('currentPrice').value = latestClose.toFixed(2);
+    document.getElementById('marketSelect').value = exch;
+    uploadedFiles = [{ name:`${yahooSym}_live.csv`, size: parsedData.length*50 }];
+    document.getElementById('fileList').innerHTML = `<div class="file-item"><div class="file-item-info">${srcIcon} <span>${companyName} (${yahooSym}) — <strong>${parsedData.length} days</strong> via ${strat.label}</span> <span style="color:var(--green)">✓ Live</span></div></div>`;
+    st.innerHTML = `<div class="alert alert-success">✅ <strong>${strat.label}</strong>: ${parsedData.length} trading days for <strong>${companyName}</strong>. Latest close: ${CUR()}${latestClose.toFixed(2)}. <em style="font-size:11px;color:var(--text3);">Cached for 6h.</em></div>`;
     checkReady();
 
   } catch(aggErr) {
-    // All strategies failed
-    const avHint = (avApiKey || isCryptoMode) ? '' : `<br><small>• 🔑 <b>Best fix:</b> <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent)">Get a free Alpha Vantage API key →</a> — bypasses all proxy issues</small>`;
+    const hasKey = avKey || tdKey || fmpKey;
+    const keyHint = !hasKey ? `<br><small>• 🔑 <strong>Tip:</strong> Add a free <a href="https://twelvedata.com/pricing" target="_blank" style="color:var(--accent)">TwelveData key</a> (800 req/day) or <a href="https://www.alphavantage.co/support/#api-key" target="_blank" style="color:var(--accent)">Alpha Vantage key</a> for reliable direct access — no proxy needed.</small>` : '';
     const modeHints = {
-      india:  `<br><small>• Symbol: NSE code — e.g., <b>RELIANCE</b>, <b>INFY</b>, <b>TCS</b> (no suffix)</small><br><small>• Try switching NSE ↔ BSE</small><br><small>• Fallback: <a href="https://www.nseindia.com/report-detail/eq_security" target="_blank" style="color:var(--accent)">Download CSV from NSE →</a></small>`,
-      us:     `<br><small>• Symbol: US ticker — e.g., <b>AAPL</b>, <b>TSLA</b>, <b>NVDA</b> (no exchange prefix)</small><br><small>• Fallback: <a href="https://finance.yahoo.com/quote/${yahooSym}/history/" target="_blank" style="color:var(--accent)">📥 Download from Yahoo Finance →</a> then use CSV Upload tab</small>`,
-      crypto: `<br><small>• Use: <b>BTC-USD</b>, <b>ETH-USD</b>, <b>SOL-USD</b></small><br><small>• Fallback: <a href="https://finance.yahoo.com/quote/${yahooSym}/history/" target="_blank" style="color:var(--accent)">📥 Download from Yahoo Finance →</a></small>`,
+      india:  `<br><small>• NSE codes: <b>RELIANCE</b>, <b>INFY</b>, <b>TCS</b> (no .NS suffix)</small><br><small>• Try BSE ↔ NSE toggle</small><br><small>• Fallback: <a href="https://www.nseindia.com/report-detail/eq_security" target="_blank" style="color:var(--accent)">Download NSE CSV →</a></small>`,
+      us:     `<br><small>• US tickers: <b>AAPL</b>, <b>TSLA</b>, <b>NVDA</b> (no exchange prefix)</small><br><small>• Fallback: <a href="https://finance.yahoo.com/quote/${yahooSym}/history/" target="_blank" style="color:var(--accent)">📥 Yahoo Finance CSV →</a></small>`,
+      crypto: `<br><small>• Format: <b>BTC-USD</b>, <b>ETH-USD</b>, <b>SOL-USD</b></small><br><small>• Fallback: <a href="https://finance.yahoo.com/quote/${yahooSym}/history/" target="_blank" style="color:var(--accent)">📥 Yahoo Finance CSV →</a></small>`,
     };
-    st.innerHTML = `<div class="alert alert-error">❌ All ${strategies.length} sources failed for <strong>${yahooSym}</strong> (tried in parallel, 6s limit each).
-      ${avHint}
-      ${modeHints[marketMode] || modeHints.india}
-      <br><small>• Check your internet connection · If using <code>file://</code>, open via <code>http://localhost:8080</code> instead</small>
+    st.innerHTML = `<div class="alert alert-error">❌ All ${strategies.length} sources failed for <strong>${yahooSym}</strong>.
+      ${keyHint}${modeHints[marketMode] || modeHints.india}
+      <br><small>• Check internet · On <code>file://</code>? Serve via <code>http://localhost:8080</code></small>
     </div>`;
   }
 
